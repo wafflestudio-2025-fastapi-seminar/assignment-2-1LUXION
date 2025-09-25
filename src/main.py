@@ -10,7 +10,6 @@ app = FastAPI()
 
 # Include routers
 app.include_router(api_router)
-app.include_router(user_router, prefix="/api/users", tags=["users"])
 
 @app.exception_handler(RequestValidationError)
 def handle_request_validation_error(request, exc):

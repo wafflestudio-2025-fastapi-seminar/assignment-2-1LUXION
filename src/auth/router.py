@@ -21,26 +21,28 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 ph = PasswordHasher()
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
-	to_encode = data.copy()
-	expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-	to_encode.update({"exp": expire})
+
+def create_jwt_token(sub: str, expires_delta: timedelta):
+	expire = datetime.utcnow() + expires_delta
+	to_encode = {"sub": sub, "exp": int(expire.timestamp())}
 	return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 @auth_router.post("/token", response_model=TokenResponse)
 def issue_token(request: TokenRequest):
 	# 사용자 조회
 	user = next((u for u in user_db if u["email"] == request.email), None)
 	if not user:
-		raise CustomException(status_code=401, error_code="ERR_010", error_message="INVALID CREDENTIALS")
+		raise CustomException(status_code=401, error_code="ERR_010", error_message="INVALID ACCOUNT")
 	# 비밀번호 검증
 	try:
 		ph.verify(user["hashed_password"], request.password)
 	except argon2_exceptions.VerifyMismatchError:
-		raise CustomException(status_code=401, error_code="ERR_010", error_message="INVALID CREDENTIALS")
-	# 토큰 생성
-	access_token = create_access_token({"user_id": user["user_id"]})
-	return TokenResponse(access_token=access_token)
+		raise CustomException(status_code=401, error_code="ERR_010", error_message="INVALID ACCOUNT")
+	# 토큰 생성 (sub: user_id)
+	access_token = create_jwt_token(str(user["user_id"]), timedelta(minutes=SHORT_SESSION_LIFESPAN))
+	refresh_token = create_jwt_token(str(user["user_id"]), timedelta(minutes=LONG_SESSION_LIFESPAN))
+	return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 
@@ -61,20 +63,21 @@ def decode_token(token: str, verify_exp: bool = True):
 	except JWTError:
 		raise CustomException(status_code=401, error_code="ERR_008", error_message="INVALID TOKEN")
 
+
 @auth_router.post("/token/refresh")
 def refresh_token(authorization: str = Header(None)):
 	refresh_token = extract_token_from_header(authorization)
 	if refresh_token in blocked_token_db:
 		raise CustomException(status_code=401, error_code="ERR_008", error_message="INVALID TOKEN")
 	payload = decode_token(refresh_token)
-	user_id = payload.get("user_id") or payload.get("sub")
+	user_id = payload.get("sub")
 	if not user_id:
 		raise CustomException(status_code=401, error_code="ERR_008", error_message="INVALID TOKEN")
 	# 기존 refresh_token 블랙리스트 처리
 	blocked_token_db[refresh_token] = payload.get("exp")
 	# 새 토큰 발급
-	access_token = create_access_token({"user_id": user_id}, timedelta(minutes=SHORT_SESSION_LIFESPAN))
-	new_refresh_token = create_access_token({"user_id": user_id}, timedelta(minutes=LONG_SESSION_LIFESPAN))
+	access_token = create_jwt_token(str(user_id), timedelta(minutes=SHORT_SESSION_LIFESPAN))
+	new_refresh_token = create_jwt_token(str(user_id), timedelta(minutes=LONG_SESSION_LIFESPAN))
 	return {"access_token": access_token, "refresh_token": new_refresh_token}
 
 

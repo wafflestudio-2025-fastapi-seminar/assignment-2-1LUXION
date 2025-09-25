@@ -18,7 +18,7 @@ class CreateUserRequest(BaseModel):
         if len(v) < 8 or len(v) > 20:
             raise InvalidPasswordException()
         return v
-    
+
     @field_validator('phone_number', mode='after')
     def validate_phone_number(cls, v):
         if not re.match(r"^010-\d{4}-\d{4}$", v):
@@ -26,7 +26,7 @@ class CreateUserRequest(BaseModel):
                 status_code=422,
                 detail={
                     "error_code": "ERR_003",
-                    "error_msg": "INVALID PHONE NUMBER FORMAT"
+                    "error_msg": "INVALID PHONE NUMBER"
                 }
             )
         return v
@@ -37,7 +37,7 @@ class CreateUserRequest(BaseModel):
             raise HTTPException(
                 status_code=422,
                 detail={
-                    "error_code": "ERR_003",
+                    "error_code": "ERR_004",
                     "error_msg": "BIO TOO LONG"
                 }
             )
