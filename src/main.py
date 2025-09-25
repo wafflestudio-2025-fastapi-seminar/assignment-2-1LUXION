@@ -1,16 +1,26 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from tests.util import get_all_src_py_files_hash
 from src.api import api_router
+from src.users.router import user_router
 
 app = FastAPI()
 
+# Include routers
 app.include_router(api_router)
+app.include_router(user_router, prefix="/api/users", tags=["users"])
 
 @app.exception_handler(RequestValidationError)
 def handle_request_validation_error(request, exc):
-    pass
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error_code": "ERR_001",
+            "error_msg": "MISSING VALUE"
+        }
+    )
 
 @app.get("/health")
 def health_check():

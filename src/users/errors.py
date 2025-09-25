@@ -1,4 +1,4 @@
-from common import CustomException
+from src.common.custom_exception import CustomException
 
 class InvalidPasswordException(CustomException):
     def __init__(self):
